@@ -54,24 +54,15 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
     init( _ channel: FlutterMethodChannel, registrar: FlutterPluginRegistrar ) {
         self.channel = channel
         self.registrar = registrar
-        //self.mInputNode = mAudioEngine.inputNode
-    
         super.init()
-        //self.attachPlayer()
-        //mAudioEngine.prepare()
     }
     
     public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
+        print("plugin call.method: " + call.method)
         switch call.method {
         case "hasPermission":
             hasPermission(result)
         case "initializeRecorder":
-            self.mInputNode = mAudioEngine.inputNode
-            self.attachPlayer()
-            do {
-                try AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
-            } catch { }
-            mAudioEngine.prepare()
             initializeRecorder(call, result)
         case "startRecording":
             startRecording(result)
@@ -175,19 +166,41 @@ public class SwiftSoundStreamPlugin: NSObject, FlutterPlugin {
     }
     
     private func initializeRecorder(_ call: FlutterMethodCall, _ result: @escaping FlutterResult) {
-        guard let argsArr = call.arguments as? Dictionary<String,AnyObject>
-            else {
-                sendResult(result, FlutterError( code: SoundStreamErrors.Unknown.rawValue,
-                                                 message:"Incorrect parameters",
-                                                 details: nil ))
-                return
-        }
-        mRecordSampleRate = argsArr["sampleRate"] as? Double ?? mRecordSampleRate
-        debugLogging = argsArr["showLogs"] as? Bool ?? debugLogging
-        mRecordFormat = AVAudioFormat(commonFormat: AVAudioCommonFormat.pcmFormatInt16, sampleRate: mRecordSampleRate, channels: 1, interleaved: true)
-        
+   
         checkAndRequestPermission { isGranted in
             if isGranted {
+                
+                print("isGranted")
+                
+                do {
+                   // Set up the audio session
+                   let audioSession = AVAudioSession.sharedInstance()
+                   try audioSession.setCategory(.playAndRecord, mode: .default)
+                   try audioSession.setActive(true)
+                    
+                } catch {
+                    print("Failed to set up audio session: \(error)")
+                }
+                
+                //Note: call to init {inputNode}
+                let input = self.mAudioEngine.inputNode
+                dump(input)
+                
+                guard let argsArr = call.arguments as? Dictionary<String,AnyObject>
+                    else {
+                    self.sendResult(result, FlutterError( code: SoundStreamErrors.Unknown.rawValue,
+                                                         message:"Incorrect parameters",
+                                                         details: nil ))
+                        return
+                }
+                self.mRecordSampleRate = argsArr["sampleRate"] as? Double ?? self.mRecordSampleRate
+                self.debugLogging = argsArr["showLogs"] as? Bool ?? self.debugLogging
+                self.mRecordFormat = AVAudioFormat(commonFormat: AVAudioCommonFormat.pcmFormatInt16, sampleRate: self.mRecordSampleRate, channels: 1, interleaved: true)
+                
+                do {
+                    try AVAudioSession.sharedInstance().setAllowHapticsAndSystemSoundsDuringRecording(true)
+                } catch { }
+                
                 self.sendRecorderStatus(SoundStreamStatus.Initialized)
                 self.sendResult(result, true)
             } else {
